@@ -1,0 +1,11 @@
+fastapi==0.165.0
+uvicorn[standard]
+httpx
+websockets
+numpy
+scipy
+onnxruntime
+faster-whisper==1.2.1
+piper-tts==1.8.0
+pytest
+pytest-asyncio

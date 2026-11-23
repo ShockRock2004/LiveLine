@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiveLine</title>
+<link rel="icon" href="data:,">
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #0f1419; color: #e6e6e6; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+  h2 { font-size: 14px; color: #9fb3c8; margin: 28px 0 10px; text-transform: uppercase; }
+  .muted { color: #8a96a3; font-size: 13px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .card { background: #182029; border: 1px solid #263240; border-radius: 8px; padding: 12px; }
+  .card b { display: block; font-size: 22px; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #263240; vertical-align: top; }
+  .n { text-align: right; font-variant-numeric: tabular-nums; }
+  form { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 16px; }
+  label { font-size: 12px; color: #9fb3c8; }
+  input { width: 100%; box-sizing: border-box; background: #0f1419; color: #e6e6e6; border: 1px solid #2d3b4a; border-radius: 6px; padding: 6px 8px; }
+  button { margin-top: 12px; background: #2e6db4; color: white; border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+  .tag { color: #f0a35e; font-size: 11px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LiveLine</h1>
+  <div class="muted">Milliseconds, measured from the moment the caller stops speaking.</div>
+  <h2>Latency</h2>
+  <div class="cards" id="cards"></div>
+  <h2>Recent turns</h2>
+  <table>
+    <thead><tr><th>Call</th><th>Caller</th><th>Agent</th>
+      <th class="n">Endpoint</th><th class="n">STT</th><th class="n">LLM</th><th class="n">TTS</th><th class="n">Total</th></tr></thead>
+    <tbody id="turns"></tbody>
+  </table>
+  <h2>Settings</h2>
+  <form id="settings"></form>
+  <button id="save">Save</button> <span class="muted" id="saved"></span>
+</main>
+<script>
+const STAGES = {total_ms: "Total", endpoint_ms: "Endpoint wait", stt_ms: "Speech to text",
+                llm_ms: "LLM first sentence", tts_ms: "Text to speech", barge_in_ms: "Barge-in"};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const get = url => fetch(url).then(r => r.json());
+
+async function refresh() {
+  const s = await get("/api/summary");
+  document.getElementById("cards").innerHTML = `<div class="card">Calls / turns<b>${s.calls} / ${s.turns}</b></div>` +
+    Object.entries(STAGES).map(([k, label]) => `<div class="card">${label}<b>${s[k].mean}</b>
+      <span class="muted">p50 ${s[k].p50} · p95 ${s[k].p95}</span></div>`).join("");
+  const calls = await get("/api/calls");
+  document.getElementById("turns").innerHTML = calls.flatMap(c => c.turns.map(t => `<tr>
+    <td>${c.started_at}<br><span class="muted">${c.provider}</span></td>
+    <td>${esc(t.user_text)}</td>
+    <td>${esc(t.reply_text)} ${t.interrupted ? '<span class="tag">interrupted</span>' : ""}</td>
+    ${["endpoint_ms", "stt_ms", "llm_ms", "tts_ms", "total_ms"].map(k => `<td class="n">${Math.round(t[k])}</td>`).join("")}
+  </tr>`)).join("");
+}
+
+get("/api/settings").then(s => document.getElementById("settings").innerHTML = Object.entries(s).map(([k, v]) =>
+  `<div><label>${k}<input name="${k}" value="${esc(v)}"></label></div>`).join(""));
+
+document.getElementById("save").onclick = async () => {
+  const body = Object.fromEntries(new FormData(document.getElementById("settings")));
+  await fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  document.getElementById("saved").textContent = "saved";
+};
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

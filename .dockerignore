@@ -1,0 +1,6 @@
+.venv
+.claude
+models
+state
+tests
+settings.json
